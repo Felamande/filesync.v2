@@ -2,6 +2,7 @@ package uri
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -9,12 +10,15 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+
 	"time"
 )
 
 var protocolRegistry map[string]reflect.Type
 
-type Handler func(root Uri, u Uri) error
+type Visitor interface {
+	Visit(Uri) error
+}
 
 func init() {
 	protocolRegistry = make(map[string]reflect.Type, 4)
@@ -34,7 +38,7 @@ type Uri interface {
 	OpenRead() (io.ReadCloser, error)
 	OpenWrite() (io.WriteCloser, error)
 	Remove() error
-	Walk(dh, fh Handler) error //dh is the handler to handle a directory,and fh is the handler to handle a file.
+	Walk(v Visitor) error
 
 	IsDir() bool
 	Exist() bool
@@ -42,22 +46,23 @@ type Uri interface {
 
 	Mode() os.FileMode
 	ModTime() time.Time
-    
-    // Read(p []byte)(n int,err error)
-    // Write(p []byte)(n int,err error)
-    // Close()error
-    
+
+	// Read(p []byte)(n int,err error)
+	// Write(p []byte)(n int,err error)
+	// Close()error
+
 	setHost(h string)
 	setPath(p string)
 	setScheme(s string)
 }
 
 func Parse(u string) (Uri, error) {
+
 	urlp, err := url.Parse(u)
 	if err != nil {
 		return nil, ParseError{u, err.Error()}
 	}
-    
+
 	UriType, exist := protocolRegistry[urlp.Scheme]
 	if !exist {
 		return nil, ProtocolError{urlp.Scheme, "protocol not supported."}
@@ -81,6 +86,8 @@ type UriLocal struct {
 	scheme string
 	path   string
 	host   string
+	uri    string
+	abs    string
 }
 
 func (u *UriLocal) Host() string {
@@ -89,11 +96,20 @@ func (u *UriLocal) Host() string {
 }
 
 func (u *UriLocal) Uri() string {
-	return u.scheme + "://" + u.host + u.path
+	if u.uri != "" {
+		return u.uri
+	}
+	u.uri = u.scheme + "://" + u.host + u.path
+	return u.uri
+
 }
 
 func (u *UriLocal) Abs() string {
-	return u.host + u.path
+	if u.abs != "" {
+		return u.abs
+	}
+	u.abs = u.host + u.path
+	return u.abs
 }
 
 func (u *UriLocal) IsAbs() bool {
@@ -123,7 +139,7 @@ func (u *UriLocal) Exist() bool {
 func (u *UriLocal) ModTime() time.Time {
 	fi, _ := os.Stat(u.host + u.path)
 	if fi == nil {
-		return time.Date(1970, time.January, 1, 0, 0, 0, 0, time.Local)
+		return time.Date(1970, time.January, 1, 0, 0, 0, 1, time.Local)
 	}
 	return fi.ModTime()
 }
@@ -151,22 +167,18 @@ func (u *UriLocal) Create(IsDir bool, m os.FileMode) (err error) {
 }
 
 func (u *UriLocal) OpenRead() (io.ReadCloser, error) {
-	AbsPath := u.host + u.path
-
-	if !filepath.IsAbs(AbsPath) {
+	if !filepath.IsAbs(u.Abs()) {
 		return nil, OpenError{u.Uri(), "is not an absolute path."}
 	}
-	return os.OpenFile(AbsPath, os.O_RDONLY, u.Mode())
+	return os.OpenFile(u.Abs(), os.O_RDONLY, u.Mode())
 
 }
 func (u *UriLocal) OpenWrite() (io.WriteCloser, error) {
-	AbsPath := u.Abs()
-
-	if !filepath.IsAbs(AbsPath) {
+	if !filepath.IsAbs(u.Abs()) {
 		return nil, OpenError{u.Uri(), "is not an absolute path."}
 	}
 
-	return os.OpenFile(AbsPath, os.O_WRONLY, u.Mode())
+	return os.OpenFile(u.Abs(), os.O_WRONLY, u.Mode())
 
 }
 
@@ -174,7 +186,7 @@ func (u *UriLocal) Remove() error {
 	return os.Remove(u.Abs())
 }
 
-func (u *UriLocal) Walk(dh, fh Handler) error {
+func (u *UriLocal) Walk(v Visitor) error {
 
 	if !u.IsDir() {
 		return errors.New("walk " + u.Abs() + ": is not a directory")
@@ -190,11 +202,7 @@ func (u *UriLocal) Walk(dh, fh Handler) error {
 			if err != nil {
 				return nil
 			}
-			if urip.IsDir() {
-				err = dh(u, urip)
-			} else {
-				err = fh(u, urip)
-			}
+			err = v.Visit(urip)
 			if err != nil {
 				return nil
 			}
@@ -242,7 +250,7 @@ type ParseError struct {
 }
 
 func (e ParseError) Error() string {
-	return "Error parsing " + e.Uri + " on " + runtime.GOOS + ": " + e.Message
+	return fmt.Sprintf("Error parsing %s on %s: %s", e.Uri, runtime.GOOS, e.Message)
 }
 
 type ProtocolError struct {
@@ -251,7 +259,7 @@ type ProtocolError struct {
 }
 
 func (e ProtocolError) Error() string {
-	return "When handling protocol " + e.Protocol + ": " + e.Message
+	return fmt.Sprintf("When handling protocol %s: %s", e.Protocol, e.Message)
 }
 
 type OpenError struct {
@@ -260,5 +268,5 @@ type OpenError struct {
 }
 
 func (e OpenError) Error() string {
-	return "Open " + e.Uri + "error: " + e.Message
+	return fmt.Sprintf("Open %s: %s", e.Uri, e.Message)
 }
