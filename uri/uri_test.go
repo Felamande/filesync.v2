@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"io/ioutil"
 )
 
 type Left interface {
@@ -44,12 +43,12 @@ func TestUriLocalOpen(t *testing.T) {
 	Path := filepath.Join(tmpDir, "filesync/testdata")
 	File := filepath.Join(Path, "test.txt")
 	UriString := "local://" + File
-    
-	e:=os.MkdirAll(Path, 0777)
-    if e!=nil{
-        t.Error(e)
-        return
-    }
+
+	e := os.MkdirAll(Path, 0777)
+	if e != nil {
+		t.Error(e)
+		return
+	}
 
 	u, e := Parse(UriString)
 	if e != nil {
@@ -109,7 +108,7 @@ func TestUriLocalOpen(t *testing.T) {
 }
 
 func TestOpenDir(t *testing.T) {
-    
+
 }
 
 func TestWalk(t *testing.T) {
@@ -136,7 +135,7 @@ func TestWalk(t *testing.T) {
 	)
 
 	if e != nil {
-		t.Log(e.Error())
+
 	}
 
 }

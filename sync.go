@@ -5,8 +5,6 @@ import (
 	fsnotify "gopkg.in/fsnotify.v1"
 )
 
-type Handler func(p *Pair) error
-
 type Pair struct {
 	Left  uri.Uri
 	Right uri.Uri
@@ -35,13 +33,12 @@ type message struct {
 }
 
 type Syncer struct {
-	Pairs    []*Pair
-	pmap     map[string]*Pair
-	handlers map[interface{}][]Handler
-
-	cache cacher
-	errs  chan error
-	msg   chan message
+	Pairs       []*Pair
+	pmap        map[string]*Pair
+	handlers    map[fsnotify.Op][]func(*Pair) error
+	errHandlers []func(error)
+	errs        chan error
+	msg         chan message
 }
 
 func (s *Syncer) Mux() {
@@ -56,31 +53,36 @@ func (s *Syncer) Mux() {
 				}
 			}(msg)
 		case err := <-s.errs:
+			go func(e error) {
+				if len(s.errHandlers) == 0 {
+					DefaultErrHandler(e)
+				}
+				for _, h := range s.errHandlers {
+					h(e)
+				}
+			}(err)
 
 		}
 	}
 }
 
-func (s *Syncer) HandleOp(op fsnotify.Op, h ...Handler) {
+func (s *Syncer) HandleOp(op fsnotify.Op, h ...func(p *Pair) error) {
 	s.handlers[op] = append(s.handlers[op], h...)
 }
 
-func (s *Syncer) HandleUri(uri string, h ...Handler) {
-	// if !s.watching[uri] {
-	// 	return
-	// }
-	s.handlers[uri] = append(s.handlers[uri], h...)
+func (s *Syncer) HandleError(h ...func(error)) {
+	s.errHandlers = append(s.errHandlers, h...)
 }
 
 func (s *Syncer) NewPair(left, right string) (*Pair, error) {
 	if p, ok := s.pmap[md5Hash(left, right)]; ok {
 		return p, nil
 	}
-	lUri, err := s.cache.Get(left)
+	lUri, err := uri.Parse(left)
 	if err != nil {
 		return nil, err
 	}
-	rUri, err := s.cache.Get(right)
+	rUri, err := uri.Parse(right)
 	if err != nil {
 		return nil, err
 	}
