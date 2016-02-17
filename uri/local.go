@@ -131,11 +131,8 @@ func (u *UriLocal) Walk(v Visitor) (c chan error) {
 				c <- err
 				return nil
 			}
-			err = v.Visit(urip) //Visit add subtree to wacther
-			if err != nil {
-				c <- err
-			}
-			return nil
+			result := v.Visit(urip) //Visit add
+			return result           //return nil or filepath.SkipDir
 		}
 		err := filepath.Walk(u.Abs(), walkFunc)
 
