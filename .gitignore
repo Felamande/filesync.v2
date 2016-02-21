@@ -1,2 +1,7 @@
 filesync.v2
 .vscode
+*.log
+*.txt
+.log
+*.exe
+debug
