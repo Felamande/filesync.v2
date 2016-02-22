@@ -7,3 +7,5 @@ filesync.v2
 debug
 *.prof
 *.pdf
+*.json
+*.toml

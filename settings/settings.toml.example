@@ -1,0 +1,39 @@
+[static]
+vstatic = "/static/"
+lstatic = "./server/public"
+compress = "./settings/compress.json"
+
+[server]
+port = ":9000"
+host = "127.0.0.1:9000"
+
+[template]
+ home = "./server/templates"
+ ldelime = "{%"
+ rdelime = "%}"
+ charset = "UTF-8"
+ reload = true
+ 
+[defaultvars]
+appname = "filesync Dashboard"
+ 
+[admin]
+passwd = "micro1867321"
+
+[log]
+path = "./.log"
+format = "060102.log"
+
+[filesync]
+    [[filesync.pair]]
+    left="DD"
+    right="CC"
+    
+    [[filesync.pair]]
+    left="DDD"
+    right="CCF"
+    
+    [[filesync.pair]]
+    left="DDC"
+    right="CDC"
+    
