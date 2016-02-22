@@ -16,20 +16,24 @@ const (
 	TypePanic
 	TypeFatal
 	TypeWarn
-	TypeAll
 	TypeUnknown
 )
-
-type Record []interface{}
 
 type Error struct {
 	typ ErrType
 	err interface{}
 }
 
+func (e *Error) Type() ErrType {
+	return e.typ
+}
+
+func (e *Error) Raw() interface{} {
+	return e.err
+}
+
 func (e *Error) Error() string {
 	switch err := e.err.(type) {
-	case Record:
 	case []interface{}:
 		return fmt.Sprint(err...)
 	case error:
@@ -37,5 +41,4 @@ func (e *Error) Error() string {
 	default:
 		return ""
 	}
-	return ""
 }

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Felamande/syncer/uri"
+	"github.com/Felamande/filesync.v2/syncer/uri"
 	fsnotify "gopkg.in/fsnotify.v1"
 )
 
@@ -25,7 +25,6 @@ type Syncer struct {
 }
 
 func (s *Syncer) loopMsg() {
-	// tokens := make(chan bool, 4)
 	for {
 		select {
 		case msg := <-s.msg:
@@ -51,7 +50,6 @@ func (s *Syncer) loopMsg() {
 					if err == ErrReject {
 						return
 					}
-					go func(e error) { s.errs <- e }(err)
 				}
 			}(msg)
 		}
@@ -132,6 +130,10 @@ func (s *Syncer) AddPair(left, right string, config *PairConfig) error {
 		fmt.Println("add pair", pair.Left.Uri())
 	}(p)
 	return nil
+}
+
+func (s *Syncer) emitErr(typ ErrType, v ...interface{}) {
+	go func() { s.errs <- &Error{typ, v} }()
 }
 
 func (s *Syncer) BeginWatch() {

@@ -105,7 +105,7 @@ func (u *UriLocal) OpenWrite() (io.WriteCloser, error) {
 		return nil, OpenError{u.Uri(), "is not an absolute path."}
 	}
 
-	return os.OpenFile(u.Abs(), os.O_WRONLY, u.Mode())
+	return os.OpenFile(u.Abs(), os.O_WRONLY|os.O_CREATE, u.Mode())
 
 }
 

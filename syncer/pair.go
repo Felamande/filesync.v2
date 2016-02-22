@@ -3,7 +3,7 @@ package syncer
 import (
 	"errors"
 
-	"github.com/Felamande/syncer/uri"
+	"github.com/Felamande/filesync.v2/syncer/uri"
 	"gopkg.in/fsnotify.v1"
 )
 

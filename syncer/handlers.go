@@ -3,10 +3,10 @@ package syncer
 import (
 	"fmt"
 
-	"github.com/Felamande/syncer/uri"
+	"github.com/Felamande/filesync.v2/syncer/uri"
 )
 
-func DefaultSimpleErrHandler(err error) {
+func DefaultSimpleErrHandlers(err error) {
 	fmt.Println(err)
 }
 
