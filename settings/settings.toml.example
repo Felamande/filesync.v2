@@ -25,15 +25,15 @@ path = "./.log"
 format = "060102.log"
 
 [filesync]
-    [[filesync.pair]]
-    left="DD"
-    right="CC"
+    [[filesync.pair]] #windows
+    left="local://C:/dir1"
+    right="local://D:/dir1"
     
-    [[filesync.pair]]
-    left="DDD"
-    right="CCF"
+    [[filesync.pair]] #linux
+    left="local:///home/user/dir1"
+    right="local:///home/user/dir2"
     
-    [[filesync.pair]]
-    left="DDC"
-    right="CDC"
+    [[filesync.pair]] #ftp not implemented
+    left="local://E:/dir"
+    right="ftp://127.0.0.1:21/dir"
     
