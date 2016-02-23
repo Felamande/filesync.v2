@@ -10,8 +10,9 @@ import (
 )
 
 type pair struct {
-	Left  string `toml:"left"`
-	Right string `toml:"right"`
+	Left  string   `toml:"left"`
+	Right string   `toml:"right"`
+	Skip  []string `toml:"skip"`
 }
 
 type staticCfg struct {
