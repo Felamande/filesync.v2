@@ -169,7 +169,6 @@ func (v *localVisitor) Visit(u uri.Uri) error {
 		return nil
 	}
 	if filepath.Base(u.Abs()) == ".git" {
-		fmt.Println("skip .git", u.Uri())
 		return filepath.SkipDir
 	}
 	v.p.watcher.Add(u.Abs())
