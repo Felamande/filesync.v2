@@ -3,6 +3,7 @@ package syncer
 import (
 	"errors"
 
+	"github.com/Felamande/filesync.v2/syncer/rnotify"
 	"github.com/Felamande/filesync.v2/syncer/uri"
 	"gopkg.in/fsnotify.v1"
 )
@@ -15,6 +16,7 @@ type Pair struct {
 	Right uri.Uri
 
 	watcher  *fsnotify.Watcher
+	rwatcher *rnotify.Watcher
 	progress chan int64
 	syncer   *Syncer
 	handlers map[fsnotify.Op][]OpHandler
@@ -35,4 +37,9 @@ func (p *Pair) AddWatch(u uri.Uri) error {
 		return errors.New("nil watcher")
 	}
 	return p.watcher.Add(u.Abs())
+}
+
+func (p *Pair) BeginWatch() error {
+	rnotify.NewWatcher(p.Left.Abs())
+
 }
