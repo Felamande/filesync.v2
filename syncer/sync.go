@@ -2,22 +2,97 @@ package syncer
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/Felamande/filesync.v2/syncer/uri"
 	fsnotify "gopkg.in/fsnotify.v1"
 )
 
+type Message struct {
+	Name string
+	P    *Pair
+	Op   fsnotify.Op
+}
+
 type Syncer struct {
 	Pairs          []*Pair
 	globalHandlers map[fsnotify.Op][]OpHandler
 	errHandlers    []interface{}
+	errs           chan error
+	msg            chan Message
+	addPair        chan *Pair
 }
 
-func (s *Syncer) HandleOp(op fsnotify.Op, hs ...OpHandler) {
+func (s *Syncer) loopMsg() {
+	for {
+		select {
+		case msg := <-s.msg:
+			go func(m Message) {
 
-	s.globalHandlers[op] = append(s.globalHandlers[op], hs...)
+				handlers, exist := s.globalHandlers[m.Op]
+				if !exist {
+					return
+				}
+				if len(handlers) == 0 {
+					return
+				}
+				l, r, err := prepair(m.Name, m.P)
+				if err != nil {
+					go func() { s.errs <- err }()
+					return
+				}
+				for _, h := range handlers {
+					if h == nil {
+						continue
+					}
+					err := h.HandleOp(Context{m.P, s}, l, r)
+					if err == ErrReject {
+						return
+					}
+				}
+			}(msg)
+		}
+	}
+}
+
+func (s *Syncer) loopErr() {
+	for {
+		select {
+		case err := <-s.errs:
+			go func(e error) {
+				if e == nil {
+					return
+				}
+				if E, ok := e.(*Error); ok {
+					for _, h := range s.errHandlers {
+						if h == nil {
+							continue
+						}
+						execHandler(E.typ, e, h)
+					}
+				} else {
+					go func() { s.errs <- &Error{TypeUnknown, e} }()
+				}
+
+			}(err)
+		}
+	}
+}
+
+func (s *Syncer) HandleOp(op fsnotify.Op, hs ...interface{}) {
+	for _, h := range hs {
+		switch handler := h.(type) {
+		case func(Context, uri.Uri, uri.Uri) error:
+			s.globalHandlers[op] = append(s.globalHandlers[op], OpHandlerFunc(handler))
+
+		default:
+			if iHandler, ok := h.(OpHandler); ok {
+				s.globalHandlers[op] = append(s.globalHandlers[op], iHandler)
+			}
+		}
+
+	}
 }
 
 func (s *Syncer) HandleError(hs ...interface{}) {
@@ -25,7 +100,7 @@ func (s *Syncer) HandleError(hs ...interface{}) {
 	s.errHandlers = append(s.errHandlers, hs...)
 }
 
-func (s *Syncer) AddPair(left, right string, config *PairConfig, skip ...string) error {
+func (s *Syncer) AddPair(left, right string, config *PairConfig) error {
 
 	lUri, err := uri.Parse(left)
 	if err != nil {
@@ -35,37 +110,87 @@ func (s *Syncer) AddPair(left, right string, config *PairConfig, skip ...string)
 	if err != nil {
 		return err
 	}
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+
 	p := &Pair{
 		Left:     lUri,
 		Right:    rUri,
-		Skip:     skip,
+		watcher:  watcher,
+		progress: make(chan int64),
 		handlers: make(map[fsnotify.Op][]OpHandler),
 		syncer:   s,
 		Config:   config,
 	}
 	s.Pairs = append(s.Pairs, p)
+	go func(pair *Pair) {
+		s.addPair <- pair
+		fmt.Println("add pair", pair.Left.Uri())
+	}(p)
 	return nil
 }
 
-func (s *Syncer) beginWatch() {
-	for _, p := range s.Pairs {
-		err := p.BeginWatch()
-		fmt.Println("begin watch", err)
-
-	}
+func (s *Syncer) emitErr(typ ErrType, v ...interface{}) {
+	go func() { s.errs <- &Error{typ, v} }()
 }
+
+func (s *Syncer) BeginWatch() {
+	for {
+		select {
+		case p := <-s.addPair:
+			p.Left.Walk(&localVisitor{p, s})
+			go func(pair *Pair) {
+				for {
+					select {
+					case event := <-pair.watcher.Events:
+						go func(e fsnotify.Event) {
+							s.msg <- Message{e.Name, pair, e.Op}
+						}(event)
+					}
+
+				}
+			}(p)
+		}
+	}
+
+}
+
+type localVisitor struct {
+	p *Pair
+	s *Syncer
+}
+
+func (v *localVisitor) Visit(u uri.Uri) error {
+	// fmt.Println("visit", u.Uri())
+	if !u.IsDir() {
+		v.s.msg <- Message{u.Abs(), v.p, fsnotify.Write}
+		return nil
+	}
+	if filepath.Base(u.Abs()) == ".git" {
+		return filepath.SkipDir
+	}
+	v.p.watcher.Add(u.Abs())
+	v.s.msg <- Message{u.Abs(), v.p, fsnotify.Create}
+	return nil
+}
+
 func New() *Syncer {
 	return &Syncer{
+		Pairs:          make([]*Pair, 4),
 		globalHandlers: make(map[fsnotify.Op][]OpHandler, 5),
 		errHandlers:    make([]interface{}, 4),
+		errs:           make(chan error, 4),
+		msg:            make(chan Message, 4),
+		addPair:        make(chan *Pair, 4),
 	}
 }
 
 func (s *Syncer) Run() {
-	s.beginWatch()
-	var wg sync.WaitGroup
-	wg.Add(1)
-	wg.Wait()
+	go s.BeginWatch()
+	go s.loopMsg()
+	s.loopErr()
 }
 
 func prepair(name string, p *Pair) (l uri.Uri, r uri.Uri, err error) {

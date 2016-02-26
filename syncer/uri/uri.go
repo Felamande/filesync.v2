@@ -50,6 +50,7 @@ type Uri interface {
 	OpenRead() (io.ReadCloser, error)
 	OpenWrite() (io.WriteCloser, error)
 	Remove() error
+	Walk(v Visitor) chan error
 
 	IsDir() bool
 	Exist() bool

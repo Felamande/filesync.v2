@@ -1,6 +1,7 @@
 package uri
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -110,6 +111,38 @@ func (u *UriLocal) OpenWrite() (io.WriteCloser, error) {
 
 func (u *UriLocal) Remove() error {
 	return os.Remove(u.Abs())
+}
+
+func (u *UriLocal) Walk(v Visitor) (c chan error) {
+	c = make(chan error, 4)
+	go func(vv Visitor) {
+		if !u.IsDir() {
+			c <- errors.New("walk " + u.Abs() + ": is not a directory")
+			return
+		}
+		walkFunc := func(path string, fi os.FileInfo, err error) error {
+			if err != nil {
+				c <- err
+				return nil
+			}
+			path = strings.Replace(path, "\\", "/", -1)
+			urip, err := Parse(u.Scheme() + "://" + path)
+			if err != nil {
+				c <- err
+				return nil
+			}
+			result := v.Visit(urip) //Visit add
+			return result           //return nil or filepath.SkipDir
+		}
+		err := filepath.Walk(u.Abs(), walkFunc)
+
+		if err != nil {
+			c <- err
+		}
+
+		close(c)
+	}(v)
+	return c
 }
 
 func (u *UriLocal) Path() string {

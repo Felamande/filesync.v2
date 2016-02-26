@@ -1,6 +1,8 @@
 package syncer
 
 import (
+	"errors"
+
 	"github.com/Felamande/filesync.v2/syncer/rnotify"
 	"github.com/Felamande/filesync.v2/syncer/uri"
 	"gopkg.in/fsnotify.v1"
@@ -10,11 +12,12 @@ type PairConfig struct {
 }
 
 type Pair struct {
-	Left     uri.Uri
-	Right    uri.Uri
-	Skip     []string
-	rwatcher *rnotify.Watcher
+	Left  uri.Uri
+	Right uri.Uri
 
+	watcher  *fsnotify.Watcher
+	rwatcher *rnotify.Watcher
+	progress chan int64
 	syncer   *Syncer
 	handlers map[fsnotify.Op][]OpHandler
 
@@ -28,35 +31,15 @@ func (p *Pair) clone() Pair {
 		Config: &PairConfig{},
 	}
 }
-func (p *Pair) BeginWatch() (err error) {
 
-	p.rwatcher, err = rnotify.NewWatcher(p.Left.Abs())
-	if err != nil {
-		return
+func (p *Pair) AddWatch(u uri.Uri) error {
+	if p.watcher == nil {
+		return errors.New("nil watcher")
 	}
-	events, errors, err := p.rwatcher.Skip(p.Skip...).Start()
-	if err != nil {
-		return
-	}
-	go func() {
-		for {
-			select {
-			case e := <-events:
-				println(e.Name)
-			}
-		}
-	}()
-	go func() {
-		for {
-			select {
-			case e := <-errors:
-				println(e.Error())
-			}
-		}
-	}()
-	return
+	return p.watcher.Add(u.Abs())
 }
 
-func (p *Pair) AddToWatcher(u uri.Uri) error {
-	return p.rwatcher.Add(u.Abs())
+func (p *Pair) BeginWatch() error {
+	rnotify.NewWatcher(p.Left.Abs())
+
 }
