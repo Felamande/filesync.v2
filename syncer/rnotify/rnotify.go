@@ -12,7 +12,6 @@ type Watcher struct {
 	SkipDirs []string
 	watcher  *fsnotify.Watcher
 	root     string
-	Events   chan fsnotify.Event
 }
 
 func NewWatcher(root string) (*Watcher, error) {
@@ -25,7 +24,6 @@ func NewWatcher(root string) (*Watcher, error) {
 	return &Watcher{
 		watcher: w,
 		root:    root,
-		Events:  make(chan fsnotify.Event),
 	}, err
 
 }
@@ -44,7 +42,6 @@ func (w *Watcher) Start() (chan fsnotify.Event, chan error, error) {
 		if err != nil {
 			return err
 		}
-
 		if !info.IsDir() {
 			return nil
 		}
@@ -56,36 +53,10 @@ func (w *Watcher) Start() (chan fsnotify.Event, chan error, error) {
 		}
 		err = w.watcher.Add(path)
 		if err != nil {
-			w.watcher.Errors <- err
+			go func() { w.watcher.Errors <- err }()
 		}
 		fmt.Println("add watch", path)
 		return nil
 	})
-	go func() {
-		for {
-			select {
-			case e := <-w.watcher.Events:
-				for _, dir := range w.SkipDirs {
-					if filepath.Base(e.Name) == dir {
-						goto end
-					}
-				}
-				if e.Op == fsnotify.Create && isDir(e.Name) {
-					w.watcher.Add(e.Name)
-					fmt.Println("add watch", e.Name)
-				}
-				w.Events <- e
-			end:
-			}
-		}
-	}()
-	return w.Events, w.watcher.Errors, err
-}
-
-func isDir(name string) bool {
-	fi, err := os.Stat(name)
-	if err != nil {
-		return false
-	}
-	return fi.IsDir()
+	return w.watcher.Events, w.watcher.Errors, err
 }
