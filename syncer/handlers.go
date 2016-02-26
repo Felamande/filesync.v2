@@ -35,3 +35,8 @@ type UnknownHandler interface {
 type OpHandler interface {
 	HandleOp(l uri.Uri, r uri.Uri) error
 }
+type OpHandlerFunc func(l uri.Uri, r uri.Uri) error
+
+func (hf OpHandlerFunc) HandleOp(l uri.Uri, r uri.Uri) error {
+	return hf(l, r)
+}

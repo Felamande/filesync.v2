@@ -1,6 +1,8 @@
 package syncer
 
 import (
+	"strings"
+
 	"github.com/Felamande/filesync.v2/syncer/rnotify"
 	"github.com/Felamande/filesync.v2/syncer/uri"
 	"gopkg.in/fsnotify.v1"
@@ -42,7 +44,17 @@ func (p *Pair) BeginWatch() (err error) {
 		for {
 			select {
 			case e := <-events:
-				println(e.Name)
+				l, r, err := prepair(e.Name, p)
+				if err != nil {
+					continue
+				}
+			handle:
+				for _, h := range p.syncer.globalHandlers[e.Op] {
+					err := h.HandleOp(l, r)
+					if err == ErrReject {
+						break handle
+					}
+				}
 			}
 		}
 	}()
@@ -59,4 +71,27 @@ func (p *Pair) BeginWatch() (err error) {
 
 func (p *Pair) AddToWatcher(u uri.Uri) error {
 	return p.rwatcher.Add(u.Abs())
+}
+
+func prepair(name string, p *Pair) (l uri.Uri, r uri.Uri, err error) {
+	name = strings.Replace(name, "\\", "/", -1)
+	lName := p.Left.Scheme() + "://" + name
+	l, err = uri.Parse(lName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	lTmp := p.Left.Uri()
+	rTmp := p.Right.Uri()
+	lTmplen := len(lTmp)
+	rTmplen := len(rTmp)
+	if lTmp[lTmplen-1] == '/' {
+		lTmp = lTmp[0 : lTmplen-1]
+	}
+	if rTmp[rTmplen-1] == '/' {
+		rTmp = rTmp[0 : rTmplen-1]
+	}
+	Uris := strings.Replace(l.Uri(), lTmp, rTmp, -1)
+	r, err = uri.Parse(Uris)
+	return
 }

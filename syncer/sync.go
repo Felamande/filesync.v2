@@ -2,7 +2,6 @@ package syncer
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/Felamande/filesync.v2/syncer/uri"
@@ -15,9 +14,16 @@ type Syncer struct {
 	errHandlers    []interface{}
 }
 
-func (s *Syncer) HandleOp(op fsnotify.Op, hs ...OpHandler) {
+func (s *Syncer) HandleOp(op fsnotify.Op, hs ...interface{}) {
+	for _, hi := range hs {
+		switch h := hi.(type) {
+		case func(uri.Uri, uri.Uri) error:
+			s.globalHandlers[op] = append(s.globalHandlers[op], OpHandlerFunc(h))
+		case OpHandler:
+			s.globalHandlers[op] = append(s.globalHandlers[op], h)
+		}
+	}
 
-	s.globalHandlers[op] = append(s.globalHandlers[op], hs...)
 }
 
 func (s *Syncer) HandleError(hs ...interface{}) {
@@ -66,27 +72,4 @@ func (s *Syncer) Run() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	wg.Wait()
-}
-
-func prepair(name string, p *Pair) (l uri.Uri, r uri.Uri, err error) {
-	name = strings.Replace(name, "\\", "/", -1)
-	lName := p.Left.Scheme() + "://" + name
-	l, err = uri.Parse(lName)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	lTmp := p.Left.Uri()
-	rTmp := p.Right.Uri()
-	lTmplen := len(lTmp)
-	rTmplen := len(rTmp)
-	if lTmp[lTmplen-1] == '/' {
-		lTmp = lTmp[0 : lTmplen-1]
-	}
-	if rTmp[rTmplen-1] == '/' {
-		rTmp = rTmp[0 : rTmplen-1]
-	}
-	Uris := strings.Replace(l.Uri(), lTmp, rTmp, -1)
-	r, err = uri.Parse(Uris)
-	return
 }
